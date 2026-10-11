@@ -1,0 +1,22 @@
+{
+  "name": "ihateaws",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local AWS Cloud Foundations reviewer (Modules 6–10)",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client && npm run build -w server",
+    "test": "npm run test -w server",
+    "build:questions": "npm run build:questions -w server"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

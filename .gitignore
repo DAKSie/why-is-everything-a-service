@@ -1,0 +1,23 @@
+node_modules/
+dist/
+build/
+.env
+*.log
+.DS_Store
+Thumbs.db
+
+# Nested notes clone — keep local, never modify (see README)
+notes/
+
+# Runtime / generated data
+data/app.db
+data/app.db-*
+data/questions.json
+data/cache/
+data/rejects.log
+
+# Tooling
+coverage/
+.vite/
+*.tsbuildinfo
+
