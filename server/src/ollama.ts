@@ -9,10 +9,18 @@ export type OllamaStatus = {
   detail?: string;
 };
 
-export async function checkOllama(): Promise<OllamaStatus> {
-  const pullHint = `ollama pull ${env.ollamaModel}`;
+function modelMatches(installed: string, wanted: string): boolean {
+  return (
+    installed === wanted ||
+    installed.startsWith(`${wanted}:`) ||
+    installed.split(":")[0] === wanted.split(":")[0]
+  );
+}
+
+export async function checkOllama(model = env.ollamaModel): Promise<OllamaStatus> {
+  const pullHint = `ollama pull ${model}`;
   const base: Omit<OllamaStatus, "reachable" | "modelAvailable" | "detail"> = {
-    model: env.ollamaModel,
+    model,
     baseUrl: env.ollamaBaseUrl,
     pullHint,
   };
@@ -36,12 +44,7 @@ export async function checkOllama(): Promise<OllamaStatus> {
       models?: Array<{ name?: string; model?: string }>;
     };
     const names = (body.models ?? []).map((m) => m.name ?? m.model ?? "");
-    const modelAvailable = names.some(
-      (name) =>
-        name === env.ollamaModel ||
-        name.startsWith(`${env.ollamaModel}:`) ||
-        name.split(":")[0] === env.ollamaModel.split(":")[0],
-    );
+    const modelAvailable = names.some((name) => modelMatches(name, model));
 
     return {
       ...base,

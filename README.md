@@ -46,6 +46,8 @@ Parses `./notes/Module 6–10 Notes.md` and imports tagged cards from the `.apkg
 ```bash
 ollama pull qwen2.5:7b-instruct
 npm run build:questions -- --module 10   # pilot: one module, no DB writes
+# Optional model override (default unchanged):
+npm run build:questions -- --module 10 --model qwen2.5:14b-instruct
 ```
 
-Writes `data/questions-module-10.json` and `data/review/module-10.md`. Fails clearly if Ollama or the model is unavailable. Full multi-module bank + DB load comes after pilot review.
+Writes `data/questions-module-10.json` and `data/review/module-10.md`. Uses temperature `0` + fixed seed for reproducibility; disk cache is keyed by module/chunk/type/model/template version. Fails clearly if Ollama or the model is unavailable. Full multi-module bank + DB load comes after pilot review.

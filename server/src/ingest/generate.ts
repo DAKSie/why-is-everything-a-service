@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { env } from "../env.js";
 import { questionId } from "../questions/ids.js";
 import {
   parseQuestionBank,
@@ -9,11 +8,22 @@ import {
 } from "../questions/schema.js";
 import type { AnkiSeedCard } from "./ankiImport.js";
 import { dedupeByPromptSimilarity } from "./ankiImport.js";
-import { cacheKey, chunkHash, readCache, writeCache } from "./cache.js";
+import {
+  PROMPT_TEMPLATE_VERSION,
+  chunkHash,
+  generationCacheKey,
+  logCache,
+  readCache,
+  writeCache,
+} from "./cache.js";
 import { deriveConceptTags } from "./conceptTags.js";
 import type { NoteChunk } from "./notesParser.js";
 import { ollamaChatJson } from "./ollamaClient.js";
 import { detectOutdated } from "./outdated.js";
+import {
+  validateIdentification,
+  validateMultipleChoiceOptions,
+} from "./validateQuestions.js";
 
 export type RejectRecord = {
   stage: string;
@@ -103,23 +113,24 @@ async function verifyAgainstChunk(input: {
   prompt: string;
   expectedAnswer: string;
   ctx: GenerateContext;
+  module: number;
 }): Promise<boolean> {
-  const key = cacheKey({
-    kind: "verify",
-    module: "x",
-    chunk: chunkHash(input.chunkText),
+  const key = generationCacheKey({
+    module: input.module,
+    chunkHash: chunkHash(input.chunkText),
     type: "verify",
     model: input.ctx.model,
-    prompt: createHash("sha256").update(input.prompt).digest("hex").slice(0, 12),
+    variant: createHash("sha256").update(input.prompt).digest("hex").slice(0, 12),
   });
   const cached = readCache<{ agrees: boolean; modelAnswer: string }>(
     input.ctx.cacheDir,
     key,
   );
+  logCache(!!cached, `verify module=${input.module} ${key.slice(0, 8)}`);
   if (cached) return cached.agrees;
 
   const raw = await ollamaChatJson({
-    temperature: 0,
+    model: input.ctx.model,
     system:
       "You answer ONLY using the provided NOTES CHUNK. Return JSON {\"answer\":\"...\",\"supported\":true|false}. If the chunk does not contain enough information, set supported=false.",
     user: `NOTES CHUNK:\n${input.chunkText}\n\nQUESTION:\n${input.prompt}\n\nReturn JSON only.`,
@@ -159,12 +170,72 @@ function finalizeQuestion(
   if (q.evidenceQuote && !assertLiteralQuote(chunk.text, q.evidenceQuote)) {
     return null;
   }
+  if (q.type === "multiple_choice") {
+    const mc = validateMultipleChoiceOptions(q.options);
+    if (!mc.ok) return null;
+  }
+  if (q.type === "identification") {
+    const idv = validateIdentification({
+      prompt: q.prompt,
+      acceptedAnswers: q.acceptedAnswers,
+      evidenceQuote: q.evidenceQuote,
+    });
+    if (!idv.ok) return null;
+  }
   const id = questionId({
     source: q.source,
     sourceRef: q.sourceRef,
     prompt: q.prompt,
   });
   return { ...q, id };
+}
+
+/** Deterministic short-option MC for the Module 10 ELB "three types" Anki seed. */
+function deterministicElbTypesSeed(
+  seed: AnkiSeedCard,
+  chunk: NoteChunk,
+): QuestionInput | null {
+  if (!/three types of elastic load balancers/i.test(seed.front)) return null;
+  if (seed.module !== 10) return null;
+
+  const evidenceCandidates = [
+    "Classic Load Balancer (Previous Generation)",
+    "With Application Load Balancers and Network Load Balancers, you register targets in target groups, and route traffic to the target groups.",
+    "With Classic Load Balancers, you register instances with the load balancer.",
+  ];
+  const evidenceQuote =
+    evidenceCandidates.find((q) => chunk.text.includes(q)) ??
+    pickEvidenceQuote(chunk.text, "Classic Load Balancer");
+  if (!evidenceQuote || !chunk.text.includes(evidenceQuote)) return null;
+
+  const outdated = detectOutdated(seed.front, seed.back, chunk.text);
+  return {
+    module: 10,
+    topic: chunk.heading,
+    conceptTags: deriveConceptTags(chunk.heading, chunk.text, "elb").length
+      ? deriveConceptTags(chunk.heading, chunk.text, "elb")
+      : ["elb"],
+    type: "multiple_choice",
+    difficulty: 1,
+    prompt: "Which three Elastic Load Balancing types does Module 10 list?",
+    options: [
+      "Application, Network, and Classic",
+      "Application, Gateway, and Network",
+      "Classic, Target, and Network",
+      "Application, Network, and Internet",
+    ],
+    correctIndices: [0],
+    explanation:
+      "Module 10 compares Application Load Balancer, Network Load Balancer, and Classic Load Balancer (previous generation).",
+    source: "anki",
+    sourceRef: {
+      file: "AWS Cloud Practitioner - Anki Deck.apkg",
+      heading: `anki:${seed.guid}`,
+    },
+    needsReview: outdated.needsReview,
+    outdatedNote: outdated.outdatedNote,
+    evidenceQuote,
+  };
 }
 
 export async function generateFromAnkiSeed(input: {
@@ -187,17 +258,33 @@ export async function generateFromAnkiSeed(input: {
     return null;
   }
 
-  const key = cacheKey({
+  const key = generationCacheKey({
     module: input.seed.module,
-    chunk: chunkHash(chunk.text),
+    chunkHash: chunkHash(chunk.text),
     type: input.preferType,
     model: input.ctx.model,
-    seed: input.seed.guid,
+    variant: `seed:${input.seed.guid}`,
   });
   const cached = readCache<QuestionInput>(input.ctx.cacheDir, key);
+  logCache(
+    !!cached,
+    `anki-seed ${input.preferType} guid=${input.seed.guid} ${key.slice(0, 8)}`,
+  );
   if (cached) {
     const done = finalizeQuestion(cached, chunk);
     if (done) return done;
+  }
+
+  // Prefer deterministic short options for the known ELB types card.
+  if (input.preferType === "multiple_choice") {
+    const det = deterministicElbTypesSeed(input.seed, chunk);
+    if (det) {
+      const finalDet = finalizeQuestion(det, chunk);
+      if (finalDet) {
+        writeCache(input.ctx.cacheDir, key, det);
+        return finalDet;
+      }
+    }
   }
 
   const outdated = detectOutdated(
@@ -217,7 +304,10 @@ export async function generateFromAnkiSeed(input: {
     return null;
   }
 
-  const system = `You create AWS Cloud Foundations quiz questions. Use ONLY the ANKI ANSWER as ground truth and the NOTES CHUNK for wording/evidence. Never contradict or extend beyond them. Return JSON only.`;
+  const system = `You create AWS Cloud Foundations quiz questions. Use ONLY the ANKI ANSWER as ground truth and the NOTES CHUNK for wording/evidence. Never contradict or extend beyond them. Return JSON only. Template ${PROMPT_TEMPLATE_VERSION}.`;
+
+  const mcRules =
+    "Each option MUST be at most 12 words. Never use numbered lists or multi-line list blobs as options. Prefer short service names.";
 
   const user =
     input.preferType === "multiple_choice"
@@ -226,6 +316,8 @@ ANKI FRONT: ${input.seed.front}
 ANKI ANSWER (ground truth — do not contradict): ${input.seed.back}
 NOTES CHUNK:
 ${chunk.text}
+
+${mcRules}
 
 Return JSON:
 {
@@ -260,7 +352,11 @@ Return JSON:
 
   let raw: unknown;
   try {
-    raw = await ollamaChatJson({ system, user, temperature: 0.15 });
+    raw = await ollamaChatJson({
+      model: input.ctx.model,
+      system,
+      user,
+    });
   } catch (err) {
     pushReject(input.ctx, {
       stage: "anki-seed",
@@ -274,7 +370,6 @@ Return JSON:
   const obj = raw as Record<string, unknown>;
   let evidenceQuote = String(obj.evidenceQuote ?? "");
   if (!assertLiteralQuote(chunk.text, evidenceQuote)) {
-    // Repair: force a known literal substring from the chunk.
     if (!assertLiteralQuote(chunk.text, evidenceHint)) {
       pushReject(input.ctx, {
         stage: "anki-seed-grounding",
@@ -327,6 +422,16 @@ Return JSON:
       options: (obj.options as string[]) ?? [],
       correctIndices: (obj.correctIndices as number[]) ?? [0],
     };
+    const mc = validateMultipleChoiceOptions(draft.options);
+    if (!mc.ok) {
+      pushReject(input.ctx, {
+        stage: "anki-seed-mc",
+        module: input.seed.module,
+        type: "multiple_choice",
+        reason: mc.reason ?? "invalid MC options",
+      });
+      return null;
+    }
   } else {
     const rubric = (obj.rubric as {
       keyPoints?: string[];
@@ -357,6 +462,7 @@ Return JSON:
     prompt: draft.prompt + ("scenario" in draft ? `\n${draft.scenario}` : ""),
     expectedAnswer: `${expectedAnswer}\n${input.seed.back}`,
     ctx: input.ctx,
+    module: input.seed.module,
   });
   if (!agrees) {
     pushReject(input.ctx, {
@@ -375,7 +481,7 @@ Return JSON:
       stage: "anki-seed-schema",
       module: input.seed.module,
       type: input.preferType,
-      reason: "failed zod validation after generation",
+      reason: "failed zod/mechanical validation after generation",
     });
     return null;
   }
@@ -384,26 +490,96 @@ Return JSON:
   return finalQ;
 }
 
+async function callChunkGenerator(input: {
+  chunk: NoteChunk;
+  type: "multiple_choice" | "identification" | "situational";
+  ctx: GenerateContext;
+  distractorHints: string[];
+  focusHint?: string;
+  attempt: number;
+}): Promise<unknown> {
+  const focus = input.focusHint
+    ? `\nFocus on this aspect (do not repeat a generic overview question): ${input.focusHint}\n`
+    : "";
+  const retryNote =
+    input.attempt > 0
+      ? "\nPREVIOUS ATTEMPT FAILED VALIDATION. Follow option length and uniqueness rules strictly.\n"
+      : "";
+
+  const system = `You create AWS Cloud Foundations quiz questions grounded ONLY in the NOTES CHUNK. Never invent facts. Return JSON only. evidenceQuote must be copied verbatim from the chunk. Template ${PROMPT_TEMPLATE_VERSION}.`;
+
+  let user = "";
+  if (input.type === "multiple_choice") {
+    user = `NOTES CHUNK (Module ${input.chunk.module} — ${input.chunk.headingPath.join(" > ")}):
+${input.chunk.text}
+${focus}${retryNote}
+Related terms for distractors (same module): ${input.distractorHints.join(", ")}
+
+Rules: each option ≤ 12 words; no numbered lists; no multi-line options.
+
+Return JSON:
+{
+  "prompt": "...",
+  "options": ["...","...","...","..."],
+  "correctIndices": [0],
+  "explanation": "...",
+  "evidenceQuote": "verbatim substring from NOTES CHUNK",
+  "difficulty": 1
+}`;
+  } else if (input.type === "identification") {
+    user = `NOTES CHUNK (Module ${input.chunk.module} — ${input.chunk.headingPath.join(" > ")}):
+${input.chunk.text}
+${focus}${retryNote}
+Create one identification question. The prompt MUST name the AWS service/context so only one answer fits. The accepted answer MUST appear verbatim (ignoring case) inside evidenceQuote.
+
+Return JSON:
+{
+  "prompt": "...",
+  "acceptedAnswers": ["primary"],
+  "aliases": ["optional alias"],
+  "explanation": "...",
+  "evidenceQuote": "verbatim substring from NOTES CHUNK that contains the answer",
+  "difficulty": 1
+}`;
+  } else {
+    user = `NOTES CHUNK (Module ${input.chunk.module} — ${input.chunk.headingPath.join(" > ")}):
+${input.chunk.text}
+${focus}${retryNote}
+Create one short situational question with rubric and modelAnswer grounded only in the chunk.
+Return JSON:
+{
+  "prompt": "...",
+  "scenario": "...",
+  "rubric": {"keyPoints":["..."],"mustMention":["..."],"commonMistakes":["..."]},
+  "modelAnswer": "...",
+  "explanation": "...",
+  "evidenceQuote": "verbatim substring from NOTES CHUNK",
+  "difficulty": 2
+}`;
+  }
+
+  return ollamaChatJson({ model: input.ctx.model, system, user });
+}
+
 export async function generateFromChunk(input: {
   chunk: NoteChunk;
   type: "multiple_choice" | "identification" | "situational";
   ctx: GenerateContext;
   distractorHints: string[];
-  /** Distinguishes multiple questions from the same chunk/type. */
   slot?: number;
   focusHint?: string;
 }): Promise<Question | null> {
   const { chunk, type, ctx } = input;
   const slot = input.slot ?? 0;
-  const key = cacheKey({
+  const key = generationCacheKey({
     module: chunk.module,
-    chunk: chunkHash(chunk.text),
+    chunkHash: chunkHash(chunk.text),
     type,
     model: ctx.model,
-    kind: "chunk",
-    slot,
+    variant: `slot:${slot}`,
   });
   const cached = readCache<QuestionInput>(ctx.cacheDir, key);
+  logCache(!!cached, `chunk ${type} slot=${slot} ${chunk.heading} ${key.slice(0, 8)}`);
   if (cached) {
     const done = finalizeQuestion(cached, chunk);
     if (done) return done;
@@ -422,154 +598,143 @@ export async function generateFromChunk(input: {
     return null;
   }
 
-  const system =
-    "You create AWS Cloud Foundations quiz questions grounded ONLY in the NOTES CHUNK. Never invent facts. Return JSON only. evidenceQuote must be copied verbatim from the chunk.";
-
-  let user = "";
-  const focus = input.focusHint
-    ? `\nFocus on this aspect (do not repeat a generic overview question): ${input.focusHint}\n`
-    : "";
-
-  if (type === "multiple_choice") {
-    user = `NOTES CHUNK (Module ${chunk.module} — ${chunk.headingPath.join(" > ")}):
-${chunk.text}
-${focus}
-Related terms for distractors (same module): ${input.distractorHints.join(", ")}
-
-Return JSON:
-{
-  "prompt": "...",
-  "options": ["...","...","...","..."],
-  "correctIndices": [0],
-  "explanation": "...",
-  "evidenceQuote": "verbatim substring from NOTES CHUNK",
-  "difficulty": 1
-}`;
-  } else if (type === "identification") {
-    user = `NOTES CHUNK (Module ${chunk.module} — ${chunk.headingPath.join(" > ")}):
-${chunk.text}
-${focus}
-Create one identification (fill-in-the-blank) question with a single clear term/acronym/number answer from the chunk.
-Return JSON:
-{
-  "prompt": "...",
-  "acceptedAnswers": ["primary"],
-  "aliases": ["optional alias"],
-  "explanation": "...",
-  "evidenceQuote": "verbatim substring from NOTES CHUNK",
-  "difficulty": 1
-}`;
-  } else {
-    user = `NOTES CHUNK (Module ${chunk.module} — ${chunk.headingPath.join(" > ")}):
-${chunk.text}
-${focus}
-Create one short situational question with rubric and modelAnswer grounded only in the chunk.
-Return JSON:
-{
-  "prompt": "...",
-  "scenario": "...",
-  "rubric": {"keyPoints":["..."],"mustMention":["..."],"commonMistakes":["..."]},
-  "modelAnswer": "...",
-  "explanation": "...",
-  "evidenceQuote": "verbatim substring from NOTES CHUNK",
-  "difficulty": 2
-}`;
-  }
-
-  let raw: unknown;
-  try {
-    raw = await ollamaChatJson({ system, user, temperature: 0.15 });
-  } catch (err) {
-    pushReject(ctx, {
-      stage: "chunk-gen",
-      module: chunk.module,
-      type,
-      reason: err instanceof Error ? err.message : String(err),
-      sourceRef: { file: chunk.filename, heading: chunk.headingPath.join(" > ") },
-    });
-    return null;
-  }
-
-  const obj = raw as Record<string, unknown>;
-  const evidenceQuote = String(obj.evidenceQuote ?? "");
-  if (!assertLiteralQuote(chunk.text, evidenceQuote)) {
-    // One repair attempt: force the pre-picked quote.
-    if (!assertLiteralQuote(chunk.text, evidenceHint)) {
+  let draft: QuestionInput | null = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let raw: unknown;
+    try {
+      raw = await callChunkGenerator({
+        chunk,
+        type,
+        ctx,
+        distractorHints: input.distractorHints,
+        focusHint: input.focusHint,
+        attempt,
+      });
+    } catch (err) {
       pushReject(ctx, {
-        stage: "chunk-grounding",
+        stage: "chunk-gen",
         module: chunk.module,
         type,
-        reason: "evidenceQuote not a literal substring of chunk",
-        detail: evidenceQuote.slice(0, 160),
+        reason: err instanceof Error ? err.message : String(err),
         sourceRef: { file: chunk.filename, heading: chunk.headingPath.join(" > ") },
       });
       return null;
     }
-    obj.evidenceQuote = evidenceHint;
-  }
 
-  const quote = String(obj.evidenceQuote);
-  const conceptTags =
-    deriveConceptTags(chunk.headingPath.join(" "), chunk.text).length > 0
-      ? deriveConceptTags(chunk.headingPath.join(" "), chunk.text)
-      : chunk.conceptTags;
+    const obj = raw as Record<string, unknown>;
+    let quote = String(obj.evidenceQuote ?? "");
+    if (!assertLiteralQuote(chunk.text, quote)) {
+      if (!assertLiteralQuote(chunk.text, evidenceHint)) {
+        pushReject(ctx, {
+          stage: "chunk-grounding",
+          module: chunk.module,
+          type,
+          reason: "evidenceQuote not a literal substring of chunk",
+          detail: quote.slice(0, 160),
+          sourceRef: {
+            file: chunk.filename,
+            heading: chunk.headingPath.join(" > "),
+          },
+        });
+        return null;
+      }
+      quote = evidenceHint;
+    }
 
-  const base = {
-    module: chunk.module as 6 | 7 | 8 | 9 | 10,
-    topic: chunk.heading,
-    conceptTags,
-    difficulty: (Number(obj.difficulty) === 3
-      ? 3
-      : Number(obj.difficulty) === 2
-        ? 2
-        : 1) as 1 | 2 | 3,
-    explanation: String(obj.explanation ?? ""),
-    source: "generated" as const,
-    sourceRef: {
-      file: chunk.filename,
-      heading: chunk.headingPath.join(" > "),
-    },
-    needsReview: outdated.needsReview,
-    outdatedNote: outdated.outdatedNote,
-    evidenceQuote: quote,
-  };
+    const conceptTags =
+      deriveConceptTags(chunk.headingPath.join(" "), chunk.text).length > 0
+        ? deriveConceptTags(chunk.headingPath.join(" "), chunk.text)
+        : chunk.conceptTags;
 
-  let draft: QuestionInput;
-  if (type === "multiple_choice") {
-    draft = {
-      ...base,
-      type: "multiple_choice",
-      prompt: String(obj.prompt ?? ""),
-      options: (obj.options as string[]) ?? [],
-      correctIndices: (obj.correctIndices as number[]) ?? [0],
-    };
-  } else if (type === "identification") {
-    draft = {
-      ...base,
-      type: "identification",
-      prompt: String(obj.prompt ?? ""),
-      acceptedAnswers: (obj.acceptedAnswers as string[]) ?? [],
-      aliases: (obj.aliases as string[]) ?? [],
-    };
-  } else {
-    const rubric = (obj.rubric as {
-      keyPoints?: string[];
-      mustMention?: string[];
-      commonMistakes?: string[];
-    }) ?? { keyPoints: [] };
-    draft = {
-      ...base,
-      type: "situational",
-      prompt: String(obj.prompt ?? ""),
-      scenario: String(obj.scenario ?? ""),
-      rubric: {
-        keyPoints: rubric.keyPoints ?? [],
-        mustMention: rubric.mustMention ?? [],
-        commonMistakes: rubric.commonMistakes ?? [],
+    const base = {
+      module: chunk.module as 6 | 7 | 8 | 9 | 10,
+      topic: chunk.heading,
+      conceptTags,
+      difficulty: (Number(obj.difficulty) === 3
+        ? 3
+        : Number(obj.difficulty) === 2
+          ? 2
+          : 1) as 1 | 2 | 3,
+      explanation: String(obj.explanation ?? ""),
+      source: "generated" as const,
+      sourceRef: {
+        file: chunk.filename,
+        heading: chunk.headingPath.join(" > "),
       },
-      modelAnswer: String(obj.modelAnswer ?? ""),
+      needsReview: outdated.needsReview,
+      outdatedNote: outdated.outdatedNote,
+      evidenceQuote: quote,
     };
+
+    if (type === "multiple_choice") {
+      const options = (obj.options as string[]) ?? [];
+      const mc = validateMultipleChoiceOptions(options);
+      if (!mc.ok) {
+        if (attempt === 0) continue;
+        pushReject(ctx, {
+          stage: "chunk-mc",
+          module: chunk.module,
+          type,
+          reason: mc.reason ?? "invalid MC options",
+          sourceRef: base.sourceRef,
+        });
+        return null;
+      }
+      draft = {
+        ...base,
+        type: "multiple_choice",
+        prompt: String(obj.prompt ?? ""),
+        options,
+        correctIndices: (obj.correctIndices as number[]) ?? [0],
+      };
+    } else if (type === "identification") {
+      const acceptedAnswers = (obj.acceptedAnswers as string[]) ?? [];
+      const idv = validateIdentification({
+        prompt: String(obj.prompt ?? ""),
+        acceptedAnswers,
+        evidenceQuote: quote,
+      });
+      if (!idv.ok) {
+        if (attempt === 0) continue;
+        pushReject(ctx, {
+          stage: "chunk-identification",
+          module: chunk.module,
+          type,
+          reason: idv.reason ?? "invalid identification",
+          sourceRef: base.sourceRef,
+        });
+        return null;
+      }
+      draft = {
+        ...base,
+        type: "identification",
+        prompt: String(obj.prompt ?? ""),
+        acceptedAnswers,
+        aliases: (obj.aliases as string[]) ?? [],
+      };
+    } else {
+      const rubric = (obj.rubric as {
+        keyPoints?: string[];
+        mustMention?: string[];
+        commonMistakes?: string[];
+      }) ?? { keyPoints: [] };
+      draft = {
+        ...base,
+        type: "situational",
+        prompt: String(obj.prompt ?? ""),
+        scenario: String(obj.scenario ?? ""),
+        rubric: {
+          keyPoints: rubric.keyPoints ?? [],
+          mustMention: rubric.mustMention ?? [],
+          commonMistakes: rubric.commonMistakes ?? [],
+        },
+        modelAnswer: String(obj.modelAnswer ?? ""),
+      };
+    }
+    break;
   }
+
+  if (!draft) return null;
 
   const expected =
     draft.type === "multiple_choice"
@@ -585,6 +750,7 @@ Return JSON:
       (draft.type === "situational" ? `\n${draft.scenario}` : ""),
     expectedAnswer: expected,
     ctx,
+    module: chunk.module,
   });
   if (!agrees) {
     pushReject(ctx, {
@@ -592,7 +758,7 @@ Return JSON:
       module: chunk.module,
       type,
       reason: "verification pass disagreed with stored answer using chunk only",
-      sourceRef: base.sourceRef,
+      sourceRef: draft.sourceRef,
     });
     return null;
   }
@@ -603,8 +769,8 @@ Return JSON:
       stage: "chunk-schema",
       module: chunk.module,
       type,
-      reason: "failed zod validation after generation",
-      sourceRef: base.sourceRef,
+      reason: "failed zod/mechanical validation after generation",
+      sourceRef: draft.sourceRef,
     });
     return null;
   }
@@ -665,7 +831,6 @@ export function buildProceduralFromSequence(
 }
 
 export function targetQuestionCount(wordCount: number): number {
-  // ~1 question per 40–60 words → use midpoint 50.
   const n = Math.round(wordCount / 50);
   return Math.max(4, Math.min(n, 24));
 }
@@ -683,32 +848,32 @@ export async function buildModuleQuestions(input: {
   directAnki: QuestionInput[];
   seeds: AnkiSeedCard[];
   cacheDir: string;
+  model: string;
 }): Promise<{ questions: Question[]; rejects: RejectRecord[] }> {
   const ctx: GenerateContext = {
     cacheDir: input.cacheDir,
     rejects: [],
-    model: env.ollamaModel,
+    model: input.model,
   };
 
   const words = input.chunks.reduce((n, c) => n + c.wordCount, 0);
   const target = targetQuestionCount(words);
   const questions: Question[] = [];
 
-  // 1) Direct Anki imports (already mapped).
   for (const q of input.directAnki.filter((x) => x.module === input.module)) {
     const id = questionId(q);
     questions.push({ ...q, id });
   }
 
-  // 2) Procedural ONLY from sequence candidates.
   for (const chunk of input.chunks) {
     for (const seq of chunk.sequenceCandidates) {
       questions.push(buildProceduralFromSequence(chunk, seq.steps));
     }
   }
 
-  // 3) Anki seeds → MC / situational alternating.
   const moduleSeeds = input.seeds.filter((s) => s.module === input.module);
+  // Stable order by guid for reproducibility.
+  moduleSeeds.sort((a, b) => a.guid.localeCompare(b.guid));
   let seedIdx = 0;
   for (const seed of moduleSeeds) {
     if (questions.length >= target) break;
@@ -723,12 +888,13 @@ export async function buildModuleQuestions(input: {
     if (q) questions.push(q);
   }
 
-  // 4) Fill from chunks with balanced types (no procedural here).
-  // One question per (chunk, type) — avoids near-duplicate cache collisions.
   const fillTypes: Array<"multiple_choice" | "identification" | "situational"> =
     ["multiple_choice", "identification", "situational"];
   const hints = distractorHintsForModule(input.chunks);
-  const chunkOrder = [...input.chunks].sort((a, b) => b.wordCount - a.wordCount);
+  const chunkOrder = [...input.chunks].sort((a, b) => {
+    if (b.wordCount !== a.wordCount) return b.wordCount - a.wordCount;
+    return a.headingPath.join(">").localeCompare(b.headingPath.join(">"));
+  });
   const focusHints = [
     "a concrete service or feature name",
     "a behavior, alarm, or scaling action",
@@ -754,10 +920,14 @@ export async function buildModuleQuestions(input: {
 
   const { kept, duplicatesDropped } = dedupeByPromptSimilarity(questions);
   if (duplicatesDropped > 0) {
-    console.log(`Deduped ${duplicatesDropped} near-duplicate prompt(s) in module ${input.module}`);
+    console.log(
+      `Deduped ${duplicatesDropped} near-duplicate prompt(s) in module ${input.module}`,
+    );
   }
 
-  // Do not pad with near-duplicates if under target — log and continue.
+  // Stable order for byte-identical JSON output.
+  kept.sort((a, b) => a.id.localeCompare(b.id));
+
   if (kept.length < target) {
     console.log(
       `Module ${input.module}: ${kept.length}/${target} questions (not padding; words=${words}).`,

@@ -1,6 +1,7 @@
 /**
  * Build question bank via notes + Anki + Ollama.
  * Pilot: npm run build:questions -- --module 10
+ * Optional: --model qwen2.5:14b-instruct
  * Does NOT write to SQLite / seed the DB.
  */
 import fs from "node:fs";
@@ -9,7 +10,10 @@ import { fileURLToPath } from "node:url";
 import { importAnkiDeck } from "../server/src/ingest/ankiImport.js";
 import { buildModuleQuestions } from "../server/src/ingest/generate.js";
 import { parseAllModuleNotes } from "../server/src/ingest/notesParser.js";
-import { assertOllamaReady, OllamaUnavailableError } from "../server/src/ingest/ollamaClient.js";
+import {
+  assertOllamaReady,
+  OllamaUnavailableError,
+} from "../server/src/ingest/ollamaClient.js";
 import { env } from "../server/src/env.js";
 import type { Question } from "../server/src/questions/schema.js";
 import { parseQuestionBank } from "../server/src/questions/schema.js";
@@ -21,8 +25,9 @@ const cacheDir = path.join(dataDir, "cache");
 const reviewDir = path.join(dataDir, "review");
 const apkgPath = path.join(notesDir, "AWS Cloud Practitioner - Anki Deck.apkg");
 
-function parseArgs(argv: string[]): { module: number | null } {
+function parseArgs(argv: string[]): { module: number | null; model: string } {
   let module: number | null = null;
+  let model = env.ollamaModel;
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--module") {
       const n = Number(argv[i + 1]);
@@ -31,9 +36,14 @@ function parseArgs(argv: string[]): { module: number | null } {
       }
       module = n;
       i += 1;
+    } else if (argv[i] === "--model") {
+      const m = argv[i + 1];
+      if (!m) throw new Error("--model requires a value");
+      model = m;
+      i += 1;
     }
   }
-  return { module };
+  return { module, model };
 }
 
 function formatAnswer(q: Question): string {
@@ -53,6 +63,7 @@ function formatAnswer(q: Question): string {
 
 function writeReviewMarkdown(input: {
   module: number;
+  model: string;
   questions: Question[];
   rejects: Array<{
     stage: string;
@@ -68,7 +79,7 @@ function writeReviewMarkdown(input: {
   lines.push(`# Module ${input.module} — question review`);
   lines.push("");
   lines.push(`Generated: ${new Date().toISOString()}`);
-  lines.push(`Model: ${env.ollamaModel}`);
+  lines.push(`Model: ${input.model}`);
   lines.push(`Questions: ${input.questions.length}`);
   lines.push(`Rejects: ${input.rejects.length}`);
   lines.push("");
@@ -76,7 +87,9 @@ function writeReviewMarkdown(input: {
   lines.push("");
 
   input.questions.forEach((q, idx) => {
-    lines.push(`### ${idx + 1}. [${q.type}] ${q.prompt.replace(/\n/g, " ").slice(0, 120)}`);
+    lines.push(
+      `### ${idx + 1}. [${q.type}] ${q.prompt.replace(/\n/g, " ").slice(0, 120)}`,
+    );
     lines.push("");
     lines.push(`- **id:** \`${q.id}\``);
     lines.push(`- **topic:** ${q.topic}`);
@@ -84,7 +97,9 @@ function writeReviewMarkdown(input: {
     lines.push(
       `- **sourceRef:** ${q.sourceRef.file} → ${q.sourceRef.heading}`,
     );
-    lines.push(`- **needsReview:** ${q.needsReview}${q.outdatedNote ? ` — ${q.outdatedNote}` : ""}`);
+    lines.push(
+      `- **needsReview:** ${q.needsReview}${q.outdatedNote ? ` — ${q.outdatedNote}` : ""}`,
+    );
     lines.push(`- **answer:** ${formatAnswer(q)}`);
     if (q.evidenceQuote) {
       lines.push(`- **evidenceQuote:** ${q.evidenceQuote}`);
@@ -113,16 +128,16 @@ function writeReviewMarkdown(input: {
 }
 
 async function main(): Promise<void> {
-  const { module } = parseArgs(process.argv.slice(2));
+  const { module, model } = parseArgs(process.argv.slice(2));
   if (module === null) {
     console.error(
-      "Pilot mode required for now. Example:\n  npm run build:questions -- --module 10",
+      "Pilot mode required for now. Example:\n  npm run build:questions -- --module 10\n  npm run build:questions -- --module 10 --model qwen2.5:14b-instruct",
     );
     process.exit(1);
   }
 
   try {
-    await assertOllamaReady();
+    await assertOllamaReady(model);
   } catch (err) {
     if (err instanceof OllamaUnavailableError) {
       console.error(`\nERROR: ${err.message}\n`);
@@ -132,7 +147,7 @@ async function main(): Promise<void> {
   }
 
   console.log(`Building Module ${module} only (no DB writes)…`);
-  console.log(`Ollama: ${env.ollamaBaseUrl} · model ${env.ollamaModel}`);
+  console.log(`Ollama: ${env.ollamaBaseUrl} · model ${model}`);
 
   const allChunks = parseAllModuleNotes(notesDir).filter((c) => c.module === module);
   const anki = importAnkiDeck(apkgPath);
@@ -149,10 +164,12 @@ async function main(): Promise<void> {
     directAnki,
     seeds,
     cacheDir,
+    model,
   });
 
-  // Final zod validation of the bank
-  const validated = parseQuestionBank(questions);
+  const validated = parseQuestionBank(questions).sort((a, b) =>
+    a.id.localeCompare(b.id),
+  );
 
   const jsonPath = path.join(dataDir, `questions-module-${module}.json`);
   const reviewPath = path.join(reviewDir, `module-${module}.md`);
@@ -160,10 +177,12 @@ async function main(): Promise<void> {
 
   fs.mkdirSync(dataDir, { recursive: true });
   fs.mkdirSync(reviewDir, { recursive: true });
-  fs.writeFileSync(jsonPath, JSON.stringify(validated, null, 2), "utf8");
-  fs.writeFileSync(rejectLogPath, JSON.stringify(rejects, null, 2), "utf8");
+  const jsonBody = `${JSON.stringify(validated, null, 2)}\n`;
+  fs.writeFileSync(jsonPath, jsonBody, "utf8");
+  fs.writeFileSync(rejectLogPath, `${JSON.stringify(rejects, null, 2)}\n`, "utf8");
   writeReviewMarkdown({
     module,
+    model,
     questions: validated,
     rejects,
     outPath: reviewPath,
@@ -176,6 +195,7 @@ async function main(): Promise<void> {
 
   console.log("\n=== Module build summary ===");
   console.log(`Module: ${module}`);
+  console.log(`Model: ${model}`);
   console.log(`Questions written: ${validated.length}`);
   console.log(`Per type:`, byType);
   console.log(`Rejects: ${rejects.length}`);

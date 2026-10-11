@@ -1,6 +1,9 @@
 import { env } from "../env.js";
 import { checkOllama } from "../ollama.js";
 
+/** Fixed seed for reproducible Ollama sampling. */
+export const OLLAMA_FIXED_SEED = 42;
+
 export class OllamaUnavailableError extends Error {
   constructor(message: string) {
     super(message);
@@ -8,8 +11,8 @@ export class OllamaUnavailableError extends Error {
   }
 }
 
-export async function assertOllamaReady(): Promise<void> {
-  const status = await checkOllama();
+export async function assertOllamaReady(model = env.ollamaModel): Promise<void> {
+  const status = await checkOllama(model);
   if (!status.reachable) {
     throw new OllamaUnavailableError(
       `Ollama is not reachable at ${status.baseUrl}. Start Ollama, then retry. ${status.detail ?? ""}`.trim(),
@@ -25,16 +28,20 @@ export async function assertOllamaReady(): Promise<void> {
 export async function ollamaChatJson(input: {
   system: string;
   user: string;
-  temperature?: number;
+  model?: string;
 }): Promise<unknown> {
+  const model = input.model ?? env.ollamaModel;
   const res = await fetch(`${env.ollamaBaseUrl}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: env.ollamaModel,
+      model,
       stream: false,
       format: "json",
-      options: { temperature: input.temperature ?? 0.1 },
+      options: {
+        temperature: 0,
+        seed: OLLAMA_FIXED_SEED,
+      },
       messages: [
         { role: "system", content: input.system },
         { role: "user", content: input.user },
