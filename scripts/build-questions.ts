@@ -1,8 +1,9 @@
 /**
- * Placeholder — full question bank build lands in Steps 3–4.
- * Invoked via: npm run build:questions
+ * Full bank build (LLM generation) lands in Step 4.
+ * Step 3 dry-run: npm run dry-run:ingest
  */
 console.log(
-  "[build:questions] Not implemented yet. Use data/sample-questions.json after Step 2.",
+  "[build:questions] LLM generation not implemented yet (Step 4).",
 );
+console.log("For notes+Anki dry-run (no DB writes): npm run dry-run:ingest");
 process.exit(0);

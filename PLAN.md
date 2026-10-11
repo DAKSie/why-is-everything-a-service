@@ -245,7 +245,7 @@ Each step = small commit + “what works / how to test”.
 | **0** | This `PLAN.md` (done) — wait for approval |
 | **1** | Scaffold monorepo: Express + Vite React + Tailwind + scripts + `.env.example` + `npm run dev` health ping (defer native deps `better-sqlite3` / `adm-zip` / `fastest-levenshtein` to Step 2 so install works without a C++ toolchain) |
 | **2** | Zod question schemas + `sample-questions.json` (20) + upsert-by-id into SQLite via `server/src/db.ts` (`better-sqlite3@13` prebuild works on Node 24 Windows) |
-| **3** | Notes parser + Anki importer (no LLM yet); write partial bank / dry-run summary |
+| **3** | Notes parser + Anki importer (no LLM); `npm run dry-run:ingest` report only (no DB writes) |
 | **4** | `build:questions` LLM generation + disk cache + zod gate + count summary |
 | **5** | Scoring utilities (MC partial, procedural, identification) + Vitest |
 | **6** | Selection engine + mastery + config + Vitest (seeded 1000 draws) |

@@ -33,4 +33,12 @@ Set `OLLAMA_BASE_URL` in `.env` (default `http://127.0.0.1:11434`).
 ollama pull qwen2.5:7b-instruct
 ```
 
-Full question-bank build and feature docs land in later steps. Source notes live in `./notes/` (read-only — do not modify).
+### Notes + Anki dry-run (Step 3, no DB writes)
+
+```bash
+npm run dry-run:ingest
+```
+
+Parses `./notes/Module 6–10 Notes.md` and imports tagged cards from the `.apkg`. Prints chunk counts, sequence candidates, Anki import/skip stats. Source notes are read-only — do not modify them.
+
+Full LLM question-bank build lands in Step 4.
