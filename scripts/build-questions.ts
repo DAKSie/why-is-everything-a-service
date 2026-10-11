@@ -46,6 +46,14 @@ function parseArgs(argv: string[]): { module: number | null; model: string } {
   return { module, model };
 }
 
+/** Short file tag for non-default models, e.g. qwen2.5:14b-instruct → 14b */
+export function modelOutputTag(model: string, defaultModel = env.ollamaModel): string | null {
+  if (model === defaultModel) return null;
+  const m = model.match(/(\d+b)/i);
+  if (m) return m[1]!.toLowerCase();
+  return model.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase();
+}
+
 function formatAnswer(q: Question): string {
   switch (q.type) {
     case "multiple_choice":
@@ -158,6 +166,7 @@ async function main(): Promise<void> {
     `Chunks: ${allChunks.length} · direct Anki: ${directAnki.length} · Anki seeds: ${seeds.length}`,
   );
 
+  const started = Date.now();
   const { questions, rejects } = await buildModuleQuestions({
     module,
     chunks: allChunks,
@@ -166,14 +175,17 @@ async function main(): Promise<void> {
     cacheDir,
     model,
   });
+  const elapsedMs = Date.now() - started;
 
   const validated = parseQuestionBank(questions).sort((a, b) =>
     a.id.localeCompare(b.id),
   );
 
-  const jsonPath = path.join(dataDir, `questions-module-${module}.json`);
-  const reviewPath = path.join(reviewDir, `module-${module}.md`);
-  const rejectLogPath = path.join(dataDir, `rejects-module-${module}.json`);
+  const tag = modelOutputTag(model);
+  const suffix = tag ? `.${tag}` : "";
+  const jsonPath = path.join(dataDir, `questions-module-${module}${suffix}.json`);
+  const reviewPath = path.join(reviewDir, `module-${module}${suffix}.md`);
+  const rejectLogPath = path.join(dataDir, `rejects-module-${module}${suffix}.json`);
 
   fs.mkdirSync(dataDir, { recursive: true });
   fs.mkdirSync(reviewDir, { recursive: true });
@@ -199,6 +211,7 @@ async function main(): Promise<void> {
   console.log(`Questions written: ${validated.length}`);
   console.log(`Per type:`, byType);
   console.log(`Rejects: ${rejects.length}`);
+  console.log(`Generation time: ${(elapsedMs / 1000).toFixed(1)}s (${elapsedMs}ms)`);
   console.log(`JSON: ${jsonPath}`);
   console.log(`Review: ${reviewPath}`);
   console.log(`Reject log: ${rejectLogPath}`);

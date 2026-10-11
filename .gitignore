@@ -17,6 +17,7 @@ data/questions-module-*.json
 data/rejects-module-*.json
 data/cache/
 data/review/
+# keep comparison artifacts local too (same globs cover *.14b.*)
 data/rejects.log
 
 # Tooling
