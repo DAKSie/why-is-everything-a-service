@@ -53,11 +53,17 @@ const report = {
   },
   anki: {
     importedTotal: anki.imported.length,
+    seedsTotal: anki.seeds.length,
     duplicatesDropped: anki.duplicatesDropped,
     importedPerModule: ankiPerModule,
     importedPerType: ankiPerType,
     skippedCount: anki.skipped.length,
-    skipped: anki.skipped,
+    skipped: anki.skipped.map(({ guid, module, reason, frontPreview }) => ({
+      guid,
+      module,
+      reason,
+      frontPreview,
+    })),
   },
   dbWrites: false,
 };

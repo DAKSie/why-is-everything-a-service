@@ -13,7 +13,10 @@ notes/
 data/app.db
 data/app.db-*
 data/questions.json
+data/questions-module-*.json
+data/rejects-module-*.json
 data/cache/
+data/review/
 data/rejects.log
 
 # Tooling

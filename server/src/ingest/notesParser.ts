@@ -37,6 +37,18 @@ function wordCount(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
 }
 
+/**
+ * Split step text glued by a missing space after a sentence period
+ * (e.g. "file system.Create your mount targets" → two steps).
+ */
+export function splitGluedStepSentences(step: string): string[] {
+  const parts = step
+    .split(/(?<=\.)(?=[A-Z])/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return parts.length > 0 ? parts : [step.trim()];
+}
+
 /** Extract consecutive top-level numbered steps from chunk text. */
 export function findSequenceCandidates(text: string): SequenceCandidate[] {
   const lines = text.split(/\r?\n/);
@@ -59,7 +71,7 @@ export function findSequenceCandidates(text: string): SequenceCandidate[] {
       if (stepMatch) {
         const n = Number(stepMatch[1]);
         if (n !== expected) break;
-        steps.push(stepMatch[2]!.trim());
+        steps.push(...splitGluedStepSentences(stepMatch[2]!.trim()));
         expected += 1;
         i += 1;
         continue;

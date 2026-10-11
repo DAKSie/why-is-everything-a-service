@@ -41,4 +41,11 @@ npm run dry-run:ingest
 
 Parses `./notes/Module 6–10 Notes.md` and imports tagged cards from the `.apkg`. Prints chunk counts, sequence candidates, Anki import/skip stats. Source notes are read-only — do not modify them.
 
-Full LLM question-bank build lands in Step 4.
+### Build questions (Step 4, needs Ollama)
+
+```bash
+ollama pull qwen2.5:7b-instruct
+npm run build:questions -- --module 10   # pilot: one module, no DB writes
+```
+
+Writes `data/questions-module-10.json` and `data/review/module-10.md`. Fails clearly if Ollama or the model is unavailable. Full multi-module bank + DB load comes after pilot review.

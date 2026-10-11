@@ -8,6 +8,7 @@ import type { QuestionInput } from "../questions/schema.js";
 import { moduleFromAnkiTags } from "./ankiTags.js";
 import { deriveConceptTags } from "./conceptTags.js";
 import { stripHtml } from "./html.js";
+import { detectOutdated } from "./outdated.js";
 import { distance } from "fastest-levenshtein";
 
 export type SkippedAnkiCard = {
@@ -15,11 +16,24 @@ export type SkippedAnkiCard = {
   module: number | null;
   reason: string;
   frontPreview: string;
+  front: string;
+  back: string;
+};
+
+/** Skipped Module 6–10 cards used as LLM generation seeds (answer = ground truth). */
+export type AnkiSeedCard = {
+  guid: string;
+  module: number;
+  front: string;
+  back: string;
+  reason: string;
 };
 
 export type AnkiImportResult = {
   imported: QuestionInput[];
   skipped: SkippedAnkiCard[];
+  /** Skipped in-scope cards with full fields for Step 4 generation. */
+  seeds: AnkiSeedCard[];
   duplicatesDropped: number;
 };
 
@@ -209,6 +223,7 @@ export function importAnkiDeck(apkgPath: string): AnkiImportResult {
 
       const importedRaw: QuestionInput[] = [];
       const skipped: SkippedAnkiCard[] = [];
+      const seeds: AnkiSeedCard[] = [];
 
       for (const row of rows) {
         const module = moduleFromAnkiTags(row.tags ?? "");
@@ -226,6 +241,8 @@ export function importAnkiDeck(apkgPath: string): AnkiImportResult {
               module: null,
               reason: "ambiguous or invalid Module-6..10 tag set",
               frontPreview: preview,
+              front,
+              back,
             });
           }
           continue;
@@ -244,27 +261,31 @@ export function importAnkiDeck(apkgPath: string): AnkiImportResult {
             module,
             reason: mapped.skip,
             frontPreview: preview,
+            front,
+            back,
+          });
+          seeds.push({
+            guid: row.guid,
+            module,
+            front,
+            back,
+            reason: mapped.skip,
           });
           continue;
         }
 
-        // Flag outdated naming when answer/prompt mentions known stale items.
         const q = mapped.question;
-        if (
-          /scheduled reserved/i.test(q.prompt + q.explanation) ||
-          /classic load balancer/i.test(q.prompt + q.explanation)
-        ) {
+        const outdated = detectOutdated(q.prompt, q.explanation, front, back);
+        if (outdated.needsReview) {
           q.needsReview = true;
-          q.outdatedNote = /scheduled reserved/i.test(q.prompt + q.explanation)
-            ? "Notes/Anki mention Scheduled Reserved Instances (retired)."
-            : "Anki card features Classic Load Balancer (previous generation).";
+          q.outdatedNote = outdated.outdatedNote;
         }
 
         importedRaw.push(q);
       }
 
       const { kept, duplicatesDropped } = dedupeByPromptSimilarity(importedRaw);
-      return { imported: kept, skipped, duplicatesDropped };
+      return { imported: kept, skipped, seeds, duplicatesDropped };
     } finally {
       db.close();
     }

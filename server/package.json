@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "test": "vitest run",
-    "build:questions": "tsx ../scripts/build-questions.ts"
+    "build:questions": "tsx ../scripts/build-questions.ts --"
   },
   "dependencies": {
     "adm-zip": "^0.6.1",

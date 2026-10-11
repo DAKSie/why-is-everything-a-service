@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   findSequenceCandidates,
   parseModuleNotesFile,
+  splitGluedStepSentences,
 } from "./notesParser.js";
 
 const notesDir = path.resolve(
@@ -47,7 +48,25 @@ describe("notes chunker", () => {
       s.steps.some((step) => /Create your Amazon EFS file system/i.test(step)),
     );
     expect(efsSeq).toBeTruthy();
-    expect(efsSeq!.steps.length).toBeGreaterThanOrEqual(3);
+    expect(efsSeq!.steps).toEqual([
+      "Create your Amazon EC2 resources and launch your Amazon EC2 instance",
+      "Create your Amazon EFS file system.",
+      "Create your mount targets in the appropriate subnets",
+      "Connect your Amazon EC2 instances to the mount targets",
+      "Verify the resources and protection of your AWS account",
+    ]);
+    expect(efsSeq!.steps.length).toBe(5);
+  });
+
+  it("splits steps glued by a missing space after a period", () => {
+    expect(
+      splitGluedStepSentences(
+        "Create your Amazon EFS file system.Create your mount targets in the appropriate subnets",
+      ),
+    ).toEqual([
+      "Create your Amazon EFS file system.",
+      "Create your mount targets in the appropriate subnets",
+    ]);
   });
 
   it("findSequenceCandidates ignores non-procedural short numbered asides when lacking cues", () => {
