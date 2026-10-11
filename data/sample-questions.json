@@ -1,0 +1,444 @@
+[
+  {
+    "module": 6,
+    "topic": "Compute Services Overview",
+    "conceptTags": ["ec2", "lambda", "ecs"],
+    "type": "multiple_choice",
+    "difficulty": 1,
+    "prompt": "Which of the following are AWS compute services listed in the Module 6 overview? (Select all that apply.)",
+    "options": [
+      "Amazon EC2",
+      "AWS Lambda",
+      "Amazon RDS",
+      "Amazon Elastic Container Service (ECS)"
+    ],
+    "correctIndices": [0, 1, 3],
+    "explanation": "Module 6 lists EC2, Lambda, ECS, EKS, Elastic Beanstalk, and others as compute services. Amazon RDS is a database service (Module 8).",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 6 Notes.md",
+      "heading": "Section 1: Compute Services Overview"
+    },
+    "needsReview": false
+  },
+  {
+    "module": 6,
+    "topic": "Amazon EC2",
+    "conceptTags": ["ec2", "ami"],
+    "type": "identification",
+    "difficulty": 1,
+    "prompt": "What AWS artifact is a template used to create an EC2 instance and typically contains an OS plus optional pre-installed software?",
+    "acceptedAnswers": ["Amazon Machine Image", "AMI"],
+    "aliases": ["amazon machine image (ami)", "an ami"],
+    "explanation": "An AMI is a template used to create an EC2 instance; it contains a Windows or Linux OS and often pre-installed software.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 6 Notes.md",
+      "heading": "Launching an EC2 Instance"
+    },
+    "needsReview": false
+  },
+  {
+    "module": 6,
+    "topic": "Amazon EC2",
+    "conceptTags": ["ec2", "launch-instance"],
+    "type": "procedural",
+    "difficulty": 2,
+    "prompt": "Put these early decisions from the EC2 Launch Instance Wizard in the correct order as described in the notes.",
+    "steps": [
+      "Select Amazon Machine Image (AMI)",
+      "Select an Instance Type",
+      "Specify Network Settings",
+      "Attach IAM Role (optional)"
+    ],
+    "explanation": "The notes list nine key launch decisions starting with AMI, then instance type, network settings, then optional IAM role.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 6 Notes.md",
+      "heading": "Launching an EC2 Instance"
+    },
+    "needsReview": false
+  },
+  {
+    "module": 6,
+    "topic": "Amazon EC2 Cost Optimization",
+    "conceptTags": ["ec2", "pricing", "spot"],
+    "type": "multiple_choice",
+    "difficulty": 2,
+    "prompt": "According to the notes, which pricing model can be interrupted by AWS with a 2-minute notification?",
+    "options": [
+      "On-Demand Instances",
+      "Reserved Instances",
+      "Spot Instances",
+      "Dedicated Hosts"
+    ],
+    "correctIndices": [2],
+    "explanation": "Spot Instances can be interrupted by AWS with a 2-minute notification; interruption options include terminated, stopped, or hibernated.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 6 Notes.md",
+      "heading": "Amazon Pricing Models"
+    },
+    "needsReview": true,
+    "outdatedNote": "Notes use Spot 'bid' language; Spot pricing model has changed since these notes were written."
+  },
+  {
+    "module": 6,
+    "topic": "Introduction to AWS Lambda",
+    "conceptTags": ["lambda", "serverless"],
+    "type": "situational",
+    "difficulty": 2,
+    "prompt": "Recommend a compute approach for a short event-driven function.",
+    "scenario": "A team wants to run a short piece of code when an object is uploaded, without managing servers. They already use other AWS services and want a serverless option mentioned in Module 6.",
+    "rubric": {
+      "keyPoints": [
+        "Recommend AWS Lambda",
+        "Note that Lambda is serverless / no servers to manage",
+        "Fits short, event-driven workloads"
+      ],
+      "mustMention": ["Lambda"],
+      "commonMistakes": [
+        "Recommending only EC2 when the requirement is serverless",
+        "Suggesting RDS as the compute layer"
+      ]
+    },
+    "modelAnswer": "Use AWS Lambda: it runs code without provisioning servers and fits short, event-driven tasks described in the Module 6 Lambda introduction.",
+    "explanation": "Module 6 introduces Lambda as a serverless compute service for running code without managing servers.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 6 Notes.md",
+      "heading": "Section 5: Introduction to AWS Lambda"
+    },
+    "needsReview": false
+  },
+  {
+    "module": 7,
+    "topic": "Amazon Elastic Block Store (EBS)",
+    "conceptTags": ["ebs", "block-storage"],
+    "type": "multiple_choice",
+    "difficulty": 1,
+    "prompt": "Which statements about Amazon EBS are true based on the notes? (Select all that apply.)",
+    "options": [
+      "It offers block-level storage for use with EC2",
+      "Volumes are automatically replicated within their Availability Zone",
+      "It is an object storage service like S3",
+      "Snapshots can be used to recreate a volume"
+    ],
+    "correctIndices": [0, 1, 3],
+    "explanation": "EBS is block storage attached to EC2, replicated within an AZ, and backed up via snapshots. Object storage is S3, not EBS.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 7 Notes.md",
+      "heading": "Section 1: Amazon Elastic Block Store (EBS)"
+    },
+    "needsReview": false
+  },
+  {
+    "module": 7,
+    "topic": "Amazon Simple Storage Service (S3)",
+    "conceptTags": ["s3", "object-storage"],
+    "type": "identification",
+    "difficulty": 1,
+    "prompt": "In Amazon S3, data is stored as objects inside what containers?",
+    "acceptedAnswers": ["buckets", "bucket"],
+    "aliases": ["s3 buckets", "an s3 bucket"],
+    "explanation": "S3 stores data as objects in buckets, with virtually unlimited storage but a 5 TB single-object limit per the notes.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 7 Notes.md",
+      "heading": "Section 2: Amazon Simple Storage Service (S3)"
+    },
+    "needsReview": false
+  },
+  {
+    "module": 7,
+    "topic": "Amazon Elastic File System",
+    "conceptTags": ["efs", "file-storage"],
+    "type": "procedural",
+    "difficulty": 2,
+    "prompt": "Order the EFS implementation steps described in the notes.",
+    "steps": [
+      "Create your Amazon EC2 resources and launch your Amazon EC2 instance",
+      "Create your Amazon EFS file system and mount targets in the appropriate subnets",
+      "Connect your Amazon EC2 instances to the mount targets",
+      "Verify the resources and protection of your AWS account"
+    ],
+    "explanation": "The notes list four EFS implementation steps: EC2 resources, EFS + mount targets, connect instances, then verify.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 7 Notes.md",
+      "heading": "EFS Implementation"
+    },
+    "needsReview": false
+  },
+  {
+    "module": 7,
+    "topic": "Amazon S3 Glacier",
+    "conceptTags": ["glacier", "s3", "archiving"],
+    "type": "situational",
+    "difficulty": 2,
+    "prompt": "Choose a low-cost archive option from the Module 7 notes.",
+    "scenario": "A compliance team needs extremely low-cost long-term archiving of infrequently accessed objects already in S3, and may use lifecycle policies to move aging objects.",
+    "rubric": {
+      "keyPoints": [
+        "Recommend Amazon S3 Glacier (as named in the notes)",
+        "Mention long-term / archive use case",
+        "Mention lifecycle policies from S3 to Glacier"
+      ],
+      "mustMention": ["Glacier"],
+      "commonMistakes": [
+        "Recommending EBS for cold archive",
+        "Saying Glacier is for low-latency hot object serving"
+      ]
+    },
+    "modelAnswer": "Use Amazon S3 Glacier for extremely low-cost long-term archiving, and configure S3 lifecycle policies to transition aging objects into Glacier as described in the notes.",
+    "explanation": "Module 7 describes Amazon S3 Glacier as a low-cost archiving service with lifecycle archiving from S3.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 7 Notes.md",
+      "heading": "Section 4: Amazon S3 Glacier"
+    },
+    "needsReview": true,
+    "outdatedNote": "Notes use Amazon S3 Glacier vault-era naming; Glacier storage-class naming has evolved (e.g. Instant/Flexible/Deep Archive)."
+  },
+  {
+    "module": 8,
+    "topic": "Amazon Relational Database Service (RDS)",
+    "conceptTags": ["rds", "multi-az"],
+    "type": "multiple_choice",
+    "difficulty": 2,
+    "prompt": "In an Amazon RDS Multi-AZ deployment, what happens if the main database instance fails?",
+    "options": [
+      "RDS automatically brings the standby instance online as the new main instance",
+      "You must manually promote a read replica in another Region",
+      "All data is lost because Multi-AZ only copies schema",
+      "CloudFront fails over the database endpoint"
+    ],
+    "correctIndices": [0],
+    "explanation": "With Multi-AZ, RDS synchronously replicates to a standby and automatically fails over by bringing the standby online as the new main instance.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 8 Notes.md",
+      "heading": "RDS Features"
+    },
+    "needsReview": false
+  },
+  {
+    "module": 8,
+    "topic": "Amazon DynamoDB",
+    "conceptTags": ["dynamodb", "nosql"],
+    "type": "identification",
+    "difficulty": 1,
+    "prompt": "Which AWS database service in Module 8 is described as a fast, flexible NoSQL database that supports document and key-value models?",
+    "acceptedAnswers": ["Amazon DynamoDB", "DynamoDB"],
+    "aliases": ["aws dynamodb"],
+    "explanation": "DynamoDB is the Module 8 NoSQL service supporting document and key-value models with single-digit millisecond latency at scale.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 8 Notes.md",
+      "heading": "Section 2: Amazon DynamoDB"
+    },
+    "needsReview": false
+  },
+  {
+    "module": 8,
+    "topic": "Amazon Aurora",
+    "conceptTags": ["aurora", "rds"],
+    "type": "multiple_choice",
+    "difficulty": 2,
+    "prompt": "According to the notes, Amazon Aurora is compatible with which database engines?",
+    "options": [
+      "MySQL and PostgreSQL",
+      "Oracle and IBM Db2 only",
+      "MongoDB and Cassandra only",
+      "Microsoft Access only"
+    ],
+    "correctIndices": [0],
+    "explanation": "The notes describe Aurora as MySQL and PostgreSQL-compatible.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 8 Notes.md",
+      "heading": "Section 4: Amazon Aurora"
+    },
+    "needsReview": false
+  },
+  {
+    "module": 8,
+    "topic": "Amazon Relational Database Service (RDS)",
+    "conceptTags": ["rds", "managed-services"],
+    "type": "situational",
+    "difficulty": 2,
+    "prompt": "Decide whether RDS fits a transactional relational workload.",
+    "scenario": "An app needs complex SQL transactions, medium-to-high query rates, high durability, and does not need massive sharding or simple key-value GET/PUT patterns.",
+    "rubric": {
+      "keyPoints": [
+        "RDS is appropriate for complex transactions/queries",
+        "Notes say use RDS for medium-to-high query/write rates within stated bounds",
+        "Avoid recommending DynamoDB as the primary fit for complex relational transactions"
+      ],
+      "mustMention": ["RDS"],
+      "commonMistakes": [
+        "Saying never use RDS for transactions",
+        "Choosing Redshift as the OLTP database"
+      ]
+    },
+    "modelAnswer": "Amazon RDS fits: the notes recommend RDS for complex transactions/queries, medium-to-high query rates, high durability, and not for massive sharding or simple NoSQL GET/PUT patterns.",
+    "explanation": "Module 8 'When to use RDS' matches this scenario; DynamoDB/NoSQL is called out for simple GET/PUT style access instead.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 8 Notes.md",
+      "heading": "When to use RDS"
+    },
+    "needsReview": false
+  },
+  {
+    "module": 9,
+    "topic": "AWS Well-Architected Framework",
+    "conceptTags": ["well-architected"],
+    "type": "multiple_choice",
+    "difficulty": 1,
+    "prompt": "Which five pillars does Module 9 list for the AWS Well-Architected Framework?",
+    "options": [
+      "Operational Excellence, Security, Reliability, Performance Efficiency, Cost Optimization",
+      "Networking, Compute, Storage, Databases, Analytics",
+      "IAM, VPC, EC2, S3, CloudFront",
+      "Agile, Waterfall, DevOps, SRE, FinOps"
+    ],
+    "correctIndices": [0],
+    "explanation": "The notes list five pillars: Operational Excellence, Security, Reliability, Performance Efficiency, and Cost Optimization.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 9 Notes.md",
+      "heading": "Section 1: AWS Well-Architected Framework"
+    },
+    "needsReview": true,
+    "outdatedNote": "Notes predate the Sustainability pillar (Well-Architected later expanded to six pillars)."
+  },
+  {
+    "module": 9,
+    "topic": "AWS Trusted Advisor",
+    "conceptTags": ["trusted-advisor"],
+    "type": "identification",
+    "difficulty": 1,
+    "prompt": "Which AWS tool provides real-time guidance to help provision resources following AWS best practices, across categories such as Cost Optimization, Performance, Security, Fault Tolerance, and Service Limits?",
+    "acceptedAnswers": ["AWS Trusted Advisor", "Trusted Advisor"],
+    "aliases": ["amazon trusted advisor"],
+    "explanation": "Module 9 describes Trusted Advisor as an online tool giving real-time best-practice recommendations in those five categories.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 9 Notes.md",
+      "heading": "Section 3: AWS Trusted Advisor"
+    },
+    "needsReview": false
+  },
+  {
+    "module": 9,
+    "topic": "Reliability and Availability",
+    "conceptTags": ["availability", "reliability"],
+    "type": "multiple_choice",
+    "difficulty": 2,
+    "prompt": "Per the notes, what does 'five 9s' availability mean?",
+    "options": [
+      "99.999 percent availability",
+      "99.9 percent availability",
+      "Five minutes of downtime per day",
+      "Five Availability Zones required"
+    ],
+    "correctIndices": [0],
+    "explanation": "The notes state that five 9s means 99.999 percent availability.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 9 Notes.md",
+      "heading": "Availability"
+    },
+    "needsReview": false
+  },
+  {
+    "module": 9,
+    "topic": "Reliability and Availability",
+    "conceptTags": ["high-availability", "fault-tolerance"],
+    "type": "situational",
+    "difficulty": 3,
+    "prompt": "Explain high availability using Module 9 terminology.",
+    "scenario": "Stakeholders ask what 'high availability' means for their architecture review, using the Module 9 definitions of degradation, downtime, and human intervention.",
+    "rubric": {
+      "keyPoints": [
+        "System can withstand some degradation while remaining available",
+        "Downtime is minimized",
+        "Minimal human intervention is required"
+      ],
+      "mustMention": ["availability"],
+      "commonMistakes": [
+        "Equating HA only with infinite scale",
+        "Saying HA means zero redundancy is required"
+      ]
+    },
+    "modelAnswer": "High availability means the system can tolerate some degradation while staying available, downtime is minimized, and minimal human intervention is required.",
+    "explanation": "Module 9's High Availability bullets match these three points.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 9 Notes.md",
+      "heading": "High Availability"
+    },
+    "needsReview": false
+  },
+  {
+    "module": 10,
+    "topic": "Elastic Load Balancing",
+    "conceptTags": ["elb", "alb", "nlb"],
+    "type": "multiple_choice",
+    "difficulty": 2,
+    "prompt": "Which load balancer types does Module 10 compare in its table?",
+    "options": [
+      "Application Load Balancer, Network Load Balancer, and Classic Load Balancer",
+      "Gateway Load Balancer only",
+      "Route 53, CloudFront, and API Gateway",
+      "NAT Gateway, Internet Gateway, and Transit Gateway"
+    ],
+    "correctIndices": [0],
+    "explanation": "The Module 10 table compares Application, Network, and Classic (previous generation) load balancers.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 10 Notes.md",
+      "heading": "Types of Load Balancers"
+    },
+    "needsReview": true,
+    "outdatedNote": "Notes feature Classic Load Balancer as a previous-generation option; treat as historical/exam context from the notes era."
+  },
+  {
+    "module": 10,
+    "topic": "Amazon CloudWatch",
+    "conceptTags": ["cloudwatch", "monitoring"],
+    "type": "identification",
+    "difficulty": 1,
+    "prompt": "Which AWS service do the Module 10 notes describe as monitoring AWS resources and applications, collecting metrics, and creating alarms that can notify SNS or trigger EC2 Auto Scaling actions?",
+    "acceptedAnswers": ["Amazon CloudWatch", "CloudWatch"],
+    "aliases": ["aws cloudwatch"],
+    "explanation": "Section 2 covers CloudWatch monitoring, metrics, and alarms that can notify SNS and perform Auto Scaling or EC2 actions.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 10 Notes.md",
+      "heading": "Section 2: Amazon CloudWatch"
+    },
+    "needsReview": false
+  },
+  {
+    "module": 10,
+    "topic": "Amazon EC2 Auto Scaling",
+    "conceptTags": ["auto-scaling", "ec2"],
+    "type": "procedural",
+    "difficulty": 2,
+    "prompt": "Order these Auto Scaling capacity-change ideas as scale-out then scale-in, using the notes' terminology.",
+    "steps": [
+      "Scale out (launch instances)",
+      "Scale in (terminate instances)"
+    ],
+    "explanation": "The notes define scale out as launching instances and scale in as terminating instances.",
+    "source": "notes",
+    "sourceRef": {
+      "file": "Module 10 Notes.md",
+      "heading": "Section 3: Amazon EC2 Auto Scaling"
+    },
+    "needsReview": false
+  }
+]

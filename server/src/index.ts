@@ -1,7 +1,20 @@
+import path from "node:path";
 import cors from "cors";
 import express from "express";
+import { migrate, openDb } from "./db.js";
 import { env } from "./env.js";
 import { checkOllama } from "./ollama.js";
+import { countQuestions, seedQuestionsFromDataDir } from "./questions/load.js";
+
+const dataDir = path.join(env.rootDir, "data");
+const dbPath = path.join(dataDir, "app.db");
+const db = openDb(dbPath);
+migrate(db);
+
+const seed = seedQuestionsFromDataDir(db, dataDir);
+console.log(
+  `Seeded questions from ${path.basename(seed.path)}: upserted=${seed.upserted}, attemptsPreserved=${seed.attemptsPreserved}`,
+);
 
 const app = express();
 
@@ -17,8 +30,13 @@ app.get("/api/health", async (_req, res) => {
   res.json({
     ok: true,
     service: "ihateaws-server",
-    ollama,
     offlineReady: true,
+    db: {
+      driver: db.driver,
+      path: db.filePath,
+      questions: countQuestions(db),
+    },
+    ollama,
   });
 });
 

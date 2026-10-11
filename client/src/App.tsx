@@ -4,6 +4,11 @@ type HealthResponse = {
   ok: boolean;
   service: string;
   offlineReady: boolean;
+  db?: {
+    driver: string;
+    path: string;
+    questions: number;
+  };
   ollama: {
     reachable: boolean;
     model: string;
@@ -117,6 +122,14 @@ export default function App() {
                 <dt className="font-medium">API</dt>
                 <dd style={{ color: "var(--muted)" }}>{health.service}</dd>
               </div>
+              {health.db ? (
+                <div>
+                  <dt className="font-medium">Question bank</dt>
+                  <dd style={{ color: "var(--muted)" }}>
+                    {health.db.questions} questions · driver {health.db.driver}
+                  </dd>
+                </div>
+              ) : null}
               <div>
                 <dt className="font-medium">Ollama base URL</dt>
                 <dd style={{ color: "var(--muted)" }}>{ollama?.baseUrl}</dd>

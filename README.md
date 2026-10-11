@@ -12,7 +12,7 @@ npm install
 npm run dev
 ```
 
-Step 1 does **not** install native modules yet. From Step 2 onward, `better-sqlite3` (and later `adm-zip`) need either a prebuilt binary for your Node version or build tools (`build-essential` in WSL, or VS “Desktop development with C++” on Windows). If `npm install` fails on native addons, use Node 22 LTS inside WSL.
+**SQLite:** `better-sqlite3@13` installs a prebuilt binary on Node 24 / Windows without Visual Studio (verified). The app talks to SQLite only through `server/src/db.ts`. If a future Node version lacks prebuilds, we can switch that wrapper to Node’s built-in `node:sqlite` without changing call sites.
 
 - App (Vite): http://localhost:5173  
 - API health: http://localhost:3001/api/health  
