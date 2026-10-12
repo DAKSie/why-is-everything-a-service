@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  answerAppearsInEvidence,
   looksLikeListBlob,
+  normalizeServiceName,
   validateIdentification,
   validateMultipleChoiceOptions,
 } from "./validateQuestions.js";
@@ -34,22 +36,74 @@ describe("validateMultipleChoiceOptions", () => {
   });
 });
 
-describe("validateIdentification", () => {
-  it("requires normalized answer inside evidenceQuote", () => {
-    const ok = validateIdentification({
-      prompt: "What is an Amazon CloudWatch alarm feature?",
-      acceptedAnswers: ["anomaly detection"],
-      evidenceQuote: "Create alarms based on: Static threshold Anomaly detection",
-    });
-    expect(ok.ok).toBe(true);
+describe("normalizeServiceName / answerAppearsInEvidence", () => {
+  it("matches Amazon CloudWatch vs CloudWatch", () => {
+    expect(normalizeServiceName("Amazon CloudWatch")).toBe("cloudwatch");
+    expect(
+      answerAppearsInEvidence(
+        "Amazon CloudWatch",
+        "CloudWatch alarms can send notifications to an Amazon SNS topic",
+      ),
+    ).toBe(true);
+  });
 
-    const bad = validateIdentification({
-      prompt: "Elastic Load Balancing scales via which service at transport layer?",
-      acceptedAnswers: ["Network Load Balancer"],
-      evidenceQuote:
+  it("matches Amazon EC2 Auto Scaling vs Auto Scaling", () => {
+    expect(normalizeServiceName("Amazon EC2 Auto Scaling")).toBe("auto scaling");
+    expect(
+      answerAppearsInEvidence(
+        "Amazon EC2 Auto Scaling",
+        "An Auto Scaling group is a collection of EC2 instances",
+      ),
+    ).toBe(true);
+  });
+
+  it("matches application load balancer naming variants", () => {
+    expect(
+      answerAppearsInEvidence(
+        "application load balancer",
+        "Application Load Balancer — Load balancing of HTTP and HTTPS traffic",
+      ),
+    ).toBe(true);
+  });
+
+  it("accepts aliases when primary form is missing from the quote", () => {
+    expect(
+      answerAppearsInEvidence("Amazon Simple Notification Service", "Send notifications to an SNS topic", [
+        "SNS",
+      ]),
+    ).toBe(true);
+  });
+
+  it("still rejects a genuine mismatch", () => {
+    expect(
+      answerAppearsInEvidence(
+        "Network Load Balancer",
         "Elastic Load Balancing distributes incoming application or network traffic across multiple targets",
-    });
-    expect(bad.ok).toBe(false);
+      ),
+    ).toBe(false);
+    expect(
+      validateIdentification({
+        prompt:
+          "Elastic Load Balancing scales via which service at the transport layer?",
+        acceptedAnswers: ["Network Load Balancer"],
+        evidenceQuote:
+          "Elastic Load Balancing distributes incoming application or network traffic across multiple targets",
+      }).ok,
+    ).toBe(false);
+  });
+});
+
+describe("validateIdentification", () => {
+  it("accepts CloudWatch naming variants in evidence", () => {
+    expect(
+      validateIdentification({
+        prompt: "Which Amazon service monitors AWS resources and applications?",
+        acceptedAnswers: ["Amazon CloudWatch"],
+        aliases: ["CloudWatch"],
+        evidenceQuote:
+          "CloudWatch Collects and tracks: Standard and custom metrics",
+      }).ok,
+    ).toBe(true);
   });
 
   it("rejects underspecified prompts", () => {

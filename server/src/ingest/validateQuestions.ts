@@ -5,9 +5,41 @@ const MAX_OPTION_WORDS = 12;
 const AMBIGUOUS_PROMPT =
   /\b(this is done via|the service that|which of the following services? performs|done via the service)\b/i;
 
-/** Normalize for substring checks (answers inside evidence). */
+/** Basic punctuation/case collapse (legacy helper). */
 export function normalizeAnswerText(text: string): string {
   return normalizePrompt(text);
+}
+
+/**
+ * Normalize AWS naming variants for evidence matching:
+ * lowercase, strip Amazon/AWS/EC2 prefixes, collapse whitespace/punctuation.
+ */
+export function normalizeServiceName(text: string): string {
+  let s = text.toLowerCase().normalize("NFKC");
+  s = s.replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
+  let prev = "";
+  while (s !== prev) {
+    prev = s;
+    s = s.replace(/^(amazon|aws|ec2)\s+/, "").trim();
+  }
+  return s;
+}
+
+/** True if answer or any alias appears in evidence after service-name normalization. */
+export function answerAppearsInEvidence(
+  answer: string,
+  evidence: string,
+  aliases: string[] = [],
+): boolean {
+  const quote = normalizeServiceName(evidence);
+  if (!quote) return false;
+  const candidates = [answer, ...aliases]
+    .map((a) => normalizeServiceName(a))
+    .filter((a) => a.length > 0);
+  for (const c of candidates) {
+    if (quote.includes(c)) return true;
+  }
+  return false;
 }
 
 export function wordCount(text: string): number {
@@ -50,25 +82,25 @@ export function validateMultipleChoiceOptions(options: string[]): {
 
 /**
  * Mechanical identification checks (not model-based).
- * - normalized answer must appear in evidenceQuote
+ * - normalized answer (or alias) must appear in evidenceQuote
  * - prompt must name enough context for a unique answer
  */
 export function validateIdentification(input: {
   prompt: string;
   acceptedAnswers: string[];
+  aliases?: string[];
   evidenceQuote?: string;
 }): { ok: boolean; reason?: string } {
   const quote = input.evidenceQuote ?? "";
   if (!quote.trim()) {
     return { ok: false, reason: "identification requires evidenceQuote" };
   }
-  const normQuote = normalizeAnswerText(quote);
   const answer = input.acceptedAnswers[0] ?? "";
-  const normAnswer = normalizeAnswerText(answer);
-  if (!normAnswer) {
+  if (!normalizeServiceName(answer)) {
     return { ok: false, reason: "empty accepted answer" };
   }
-  if (!normQuote.includes(normAnswer)) {
+  const aliases = input.aliases ?? [];
+  if (!answerAppearsInEvidence(answer, quote, aliases)) {
     return {
       ok: false,
       reason: `normalized answer not found in evidenceQuote: "${answer}"`,
@@ -82,7 +114,6 @@ export function validateIdentification(input: {
     };
   }
 
-  // Prompt must name a concrete AWS/product context, not only a vague clause.
   const contextCue =
     /\b(amazon|aws|cloudwatch|auto\s*scaling|elastic load|load balancer|application load|network load|classic load|ec2|sns|target group|scale out|scale in)\b/i;
   if (!contextCue.test(input.prompt)) {
@@ -92,39 +123,36 @@ export function validateIdentification(input: {
     };
   }
 
-  // If evidence mentions several peer LBs and answer is one of them, prompt must
-  // uniquely point at that peer (not a generic ELB scaling sentence).
   const peers = [
     "application load balancer",
     "network load balancer",
     "classic load balancer",
   ];
+  const normQuote = normalizeServiceName(quote);
+  const normAnswer = normalizeServiceName(answer);
   const peersInQuote = peers.filter((p) => normQuote.includes(p));
   const answerIsPeer = peers.some(
     (p) => normAnswer === p || normAnswer.includes(p) || p.includes(normAnswer),
   );
   if (peersInQuote.length >= 2 && answerIsPeer) {
-    const promptNorm = normalizeAnswerText(input.prompt);
-    if (!peers.some((p) => promptNorm.includes(p) && normAnswer.includes(p.split(" ")[0]!))) {
-      // Require the prompt to include the specific LB name (or clear unique trait).
-      const namesAnswer = peers.find(
-        (p) => normAnswer === p || normAnswer.includes(p),
-      );
-      if (namesAnswer && !promptNorm.includes(namesAnswer)) {
-        const uniqueTrait =
-          (namesAnswer.startsWith("application") &&
-            /content of (the )?request|layer 7|http/i.test(input.prompt)) ||
-          (namesAnswer.startsWith("network") &&
-            /layer 4|tcp|udp|ultra-low|ip protocol/i.test(input.prompt)) ||
-          (namesAnswer.startsWith("classic") &&
-            /previous generation|classic/i.test(input.prompt));
-        if (!uniqueTrait) {
-          return {
-            ok: false,
-            reason:
-              "prompt does not uniquely identify which load balancer; multiple peers in evidence",
-          };
-        }
+    const promptNorm = normalizeServiceName(input.prompt);
+    const namesAnswer = peers.find(
+      (p) => normAnswer === p || normAnswer.includes(p),
+    );
+    if (namesAnswer && !promptNorm.includes(namesAnswer)) {
+      const uniqueTrait =
+        (namesAnswer.startsWith("application") &&
+          /content of (the )?request|layer 7|http/i.test(input.prompt)) ||
+        (namesAnswer.startsWith("network") &&
+          /layer 4|tcp|udp|ultra-low|ip protocol/i.test(input.prompt)) ||
+        (namesAnswer.startsWith("classic") &&
+          /previous generation|classic/i.test(input.prompt));
+      if (!uniqueTrait) {
+        return {
+          ok: false,
+          reason:
+            "prompt does not uniquely identify which load balancer; multiple peers in evidence",
+        };
       }
     }
   }

@@ -127,6 +127,10 @@ function writeReviewMarkdown(input: {
       lines.push(
         `- **${r.stage}**${r.type ? ` / ${r.type}` : ""}: ${r.reason}${r.detail ? ` — ${r.detail}` : ""}${r.sourceRef ? ` (${r.sourceRef.file} → ${r.sourceRef.heading})` : ""}`,
       );
+      if (r.question) lines.push(`  - question: ${r.question.replace(/\n/g, " ")}`);
+      if (r.storedAnswer) lines.push(`  - storedAnswer: ${r.storedAnswer}`);
+      if (r.verifierAnswer) lines.push(`  - verifierAnswer: ${r.verifierAnswer}`);
+      if (r.evidenceQuote) lines.push(`  - evidenceQuote: ${r.evidenceQuote}`);
     }
   }
   lines.push("");

@@ -42,7 +42,7 @@ describe("generationCacheKey", () => {
       chunkHash: chunkHash("same"),
       type: "multiple_choice",
       model: "qwen2.5:7b-instruct",
-      templateVersion: "v2",
+      templateVersion: "v3",
     };
     const root = generationCacheKey(base);
     expect(generationCacheKey({ ...base, module: 9 })).not.toBe(root);
@@ -53,6 +53,6 @@ describe("generationCacheKey", () => {
     expect(generationCacheKey({ ...base, model: "qwen2.5:14b-instruct" })).not.toBe(
       root,
     );
-    expect(generationCacheKey({ ...base, templateVersion: "v3" })).not.toBe(root);
+    expect(generationCacheKey({ ...base, templateVersion: "v4" })).not.toBe(root);
   });
 });

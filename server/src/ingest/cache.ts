@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 /** Bump when prompt templates change so old cache entries are ignored. */
-export const PROMPT_TEMPLATE_VERSION = "v2";
+export const PROMPT_TEMPLATE_VERSION = "v3";
 
 export function chunkHash(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex").slice(0, 16);
