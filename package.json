@@ -12,6 +12,8 @@
     "build": "npm run build -w client && npm run build -w server",
     "test": "npm run test -w server",
     "build:questions": "tsx scripts/build-questions.ts",
+    "merge:questions": "tsx scripts/merge-questions.ts",
+    "seed": "tsx scripts/seed.ts",
     "dry-run:ingest": "tsx scripts/dry-run-ingest.ts"
   },
   "engines": {

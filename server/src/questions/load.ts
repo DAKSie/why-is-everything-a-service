@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Db } from "../db.js";
+import { attachOutdatedToQuestion } from "./outdatedAttach.js";
 import { parseQuestionBank, type Question } from "./schema.js";
 
 export type UpsertResult = {
@@ -33,7 +34,8 @@ export function upsertQuestions(db: Db, questions: Question[]): UpsertResult {
   const now = new Date().toISOString();
 
   db.transaction(() => {
-    for (const q of questions) {
+    for (const raw of questions) {
+      const q = attachOutdatedToQuestion(raw);
       stmt.run({
         id: q.id,
         module: q.module,

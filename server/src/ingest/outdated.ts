@@ -20,7 +20,16 @@ export function detectOutdated(...texts: string[]): OutdatedFlag {
     hits.push("Spot Instances content may reflect older pricing/interruption wording.");
   }
   if (/\bclassic load balancer\b/i.test(hay)) {
-    hits.push("Features Classic Load Balancer (previous generation).");
+    hits.push(
+      "Features Classic Load Balancer (previous generation); Gateway Load Balancer is not covered in these notes.",
+    );
+  }
+  // Only flag CloudWatch Events items (answer/prompt), not every CloudWatch chunk.
+  if (
+    /\bcloudwatch events\b/i.test(hay) ||
+    texts.some((t) => /^events$/i.test(t.trim()))
+  ) {
+    hits.push("CloudWatch Events is now Amazon EventBridge.");
   }
   if (/\b(amazon\s+)?s3 glacier\b|\bglacier\b/i.test(hay)) {
     hits.push("Uses Amazon S3 Glacier naming from the notes era; storage-class naming has evolved.");

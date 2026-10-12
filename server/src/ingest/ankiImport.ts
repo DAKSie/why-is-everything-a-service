@@ -163,7 +163,7 @@ function mapAnkiNote(input: {
   return { skip: "could not confidently map card to a supported question type" };
 }
 
-function similarPrompt(a: string, b: string): boolean {
+export function similarPrompt(a: string, b: string): boolean {
   const na = normalizePrompt(a);
   const nb = normalizePrompt(b);
   if (!na || !nb) return false;
@@ -176,11 +176,14 @@ function similarPrompt(a: string, b: string): boolean {
 
 export function dedupeByPromptSimilarity<T extends { prompt: string }>(
   items: T[],
+  /** Optional: compare a richer string (e.g. prompt+scenario for situational). */
+  textOf: (item: T) => string = (item) => item.prompt,
 ): { kept: T[]; duplicatesDropped: number } {
   const kept: T[] = [];
   let duplicatesDropped = 0;
   for (const item of items) {
-    if (kept.some((k) => similarPrompt(k.prompt, item.prompt))) {
+    const text = textOf(item);
+    if (kept.some((k) => similarPrompt(textOf(k), text))) {
       duplicatesDropped += 1;
       continue;
     }

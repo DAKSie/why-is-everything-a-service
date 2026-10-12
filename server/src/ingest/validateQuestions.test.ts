@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   answerAppearsInEvidence,
+  answerLeaksInPrompt,
   looksLikeListBlob,
   normalizeServiceName,
   validateIdentification,
   validateMultipleChoiceOptions,
+  validateNotExceptMultipleChoice,
 } from "./validateQuestions.js";
 
 describe("validateMultipleChoiceOptions", () => {
@@ -113,5 +115,62 @@ describe("validateIdentification", () => {
       evidenceQuote: "Network Load Balancer Operate at the transport layer",
     });
     expect(r.ok).toBe(false);
+  });
+});
+
+describe("answerLeaksInPrompt", () => {
+  it("rejects when EC2 answer leaks from EC2 instances in the prompt", () => {
+    expect(
+      answerLeaksInPrompt(
+        "Which AWS service provides the EC2 instances that are included in an Auto Scaling group?",
+        "Amazon EC2",
+      ),
+    ).toBe(true);
+  });
+
+  it("allows target-groups rewrite that does not contain the full answer", () => {
+    expect(
+      answerLeaksInPrompt(
+        "In Application and Network Load Balancers, targets are registered in what?",
+        "target groups",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("validateNotExceptMultipleChoice", () => {
+  it("rejects when the supposed NOT answer still appears in evidence", () => {
+    const r = validateNotExceptMultipleChoice({
+      prompt:
+        "Which of the following is NOT a scaling option provided by Amazon EC2 Auto Scaling?",
+      options: [
+        "Manual scaling",
+        "Scheduled scaling",
+        "Dynamic scaling",
+        "On-demand scaling",
+        "Predictive scaling",
+      ],
+      correctIndices: [3],
+      evidenceQuote:
+        "Provides several scaling options: Manual, scheduled, dynamic or on-demand, and predictive",
+    });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/correct answer appears in evidence/i);
+  });
+
+  it("accepts a true NOT when distractors are in evidence and answer is not", () => {
+    const r = validateNotExceptMultipleChoice({
+      prompt: "Which is NOT listed as an ELB monitoring method?",
+      options: [
+        "Amazon CloudWatch",
+        "access logs",
+        "AWS CloudTrail logs",
+        "AWS Config",
+      ],
+      correctIndices: [3],
+      evidenceQuote:
+        "Monitoring is done via Amazon CloudWatch, access logs, and AWS CloudTrail logs",
+    });
+    expect(r.ok).toBe(true);
   });
 });

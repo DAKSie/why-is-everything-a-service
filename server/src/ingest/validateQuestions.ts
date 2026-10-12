@@ -42,6 +42,29 @@ export function answerAppearsInEvidence(
   return false;
 }
 
+/**
+ * True when answer terms appear in the prompt after normalization
+ * (lowercase, strip Amazon/AWS/EC2 prefixes) — a leak.
+ */
+export function answerLeaksInPrompt(
+  prompt: string,
+  answer: string,
+  aliases: string[] = [],
+): boolean {
+  const p = normalizeServiceName(prompt);
+  if (!p) return false;
+  const candidates = [answer, ...aliases]
+    .map((a) => normalizeServiceName(a))
+    .filter((a) => a.length >= 3);
+  for (const c of candidates) {
+    if (p.includes(c)) return true;
+    // Multi-word: also flag if all significant tokens appear in prompt
+    const tokens = c.split(/\s+/).filter((t) => t.length >= 3);
+    if (tokens.length >= 2 && tokens.every((t) => p.includes(t))) return true;
+  }
+  return false;
+}
+
 export function wordCount(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
@@ -80,6 +103,69 @@ export function validateMultipleChoiceOptions(options: string[]): {
   return { ok: true };
 }
 
+/** True when the prompt is a NOT / EXCEPT style multiple-choice. */
+export function isNotExceptPrompt(prompt: string): boolean {
+  return /\b(NOT|EXCEPT)\b/.test(prompt);
+}
+
+/**
+ * Loose attestation for MC options vs evidence (handles "Manual scaling"
+ * vs notes that say "Manual, scheduled, …").
+ */
+export function optionAppearsInEvidence(
+  option: string,
+  evidence: string,
+): boolean {
+  if (answerAppearsInEvidence(option, evidence)) return true;
+  const quote = normalizeServiceName(evidence);
+  const opt = normalizeServiceName(option);
+  const core = opt
+    .replace(/\b(scaling|option|options|load balancers?|balancers?)\b/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
+  if (core.length >= 3 && quote.includes(core)) return true;
+  const stop = new Set(["scaling", "option", "options", "load", "balancer", "balancers"]);
+  const tokens = opt.split(/\s+/).filter((t) => t.length >= 4 && !stop.has(t));
+  if (tokens.length === 0) return false;
+  return tokens.every((t) => quote.includes(t));
+}
+
+/**
+ * NOT/EXCEPT MC: every distractor must appear in evidence; the correct
+ * answer must NOT appear (otherwise the "exception" is still attested).
+ */
+export function validateNotExceptMultipleChoice(input: {
+  prompt: string;
+  options: string[];
+  correctIndices: number[];
+  evidenceQuote: string;
+}): { ok: boolean; reason?: string } {
+  if (!isNotExceptPrompt(input.prompt)) return { ok: true };
+  const quote = input.evidenceQuote ?? "";
+  if (!quote.trim()) {
+    return { ok: false, reason: "NOT/EXCEPT requires evidenceQuote" };
+  }
+  const correct = new Set(input.correctIndices);
+  for (let i = 0; i < input.options.length; i += 1) {
+    const opt = input.options[i]!;
+    const inEvidence = optionAppearsInEvidence(opt, quote);
+    if (correct.has(i)) {
+      if (inEvidence) {
+        return {
+          ok: false,
+          reason: `NOT/EXCEPT correct answer appears in evidence: "${opt}"`,
+        };
+      }
+    } else if (!inEvidence) {
+      return {
+        ok: false,
+        reason: `NOT/EXCEPT distractor missing from evidence: "${opt}"`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
 /**
  * Mechanical identification checks (not model-based).
  * - normalized answer (or alias) must appear in evidenceQuote
@@ -107,7 +193,9 @@ export function validateIdentification(input: {
     };
   }
 
-  if (AMBIGUOUS_PROMPT.test(input.prompt)) {
+  const isCloze = /____/.test(input.prompt);
+
+  if (AMBIGUOUS_PROMPT.test(input.prompt) && !isCloze) {
     return {
       ok: false,
       reason: "prompt is underspecified (multiple answers could fit)",
@@ -116,7 +204,8 @@ export function validateIdentification(input: {
 
   const contextCue =
     /\b(amazon|aws|cloudwatch|auto\s*scaling|elastic load|load balancer|application load|network load|classic load|ec2|sns|target group|scale out|scale in)\b/i;
-  if (!contextCue.test(input.prompt)) {
+  // Cloze prompts carry context in the blanked sentence; non-cloze must name a service.
+  if (!isCloze && !contextCue.test(input.prompt)) {
     return {
       ok: false,
       reason: "prompt lacks named service/concept context for a unique answer",

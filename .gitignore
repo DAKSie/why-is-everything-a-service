@@ -24,4 +24,4 @@ data/rejects.log
 coverage/
 .vite/
 *.tsbuildinfo
-
+PLAN.md

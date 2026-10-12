@@ -1,6 +1,7 @@
 import path from "node:path";
 import cors from "cors";
 import express from "express";
+import { practiceRouter } from "./api/practice.js";
 import { migrate, openDb } from "./db.js";
 import { env } from "./env.js";
 import { checkOllama } from "./ollama.js";
@@ -39,6 +40,8 @@ app.get("/api/health", async (_req, res) => {
     ollama,
   });
 });
+
+app.use("/api", practiceRouter(db));
 
 app.listen(env.port, "127.0.0.1", () => {
   console.log(`API listening on http://127.0.0.1:${env.port}`);

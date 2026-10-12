@@ -1,53 +1,62 @@
-# IHateAWS — Local AWS Cloud Foundations Reviewer (Modules 6–10)
+# aws-ate-my-semester
 
-Local-only study app. No cloud services, no paid APIs, no telemetry.
+Local quiz app for AWS Cloud Foundations Modules 6–10, because “Elastic Block Something” and “Elastic File Something Else” are not a personality.
 
-## Quick start (Step 1 scaffold)
+## What it does
 
-Requires **Node.js 20+** (Node 20/22 LTS recommended). Prefer the project on the **WSL filesystem**.
+- Practice multiple choice, drag-order procedural, fill-in-the-blank, and situational questions
+- Runs offline with the shipped sample bank and keyword grading (Ollama optional)
+- Optional local AI for typo-tolerant ID checks, situational grading, and generating more questions
+- Flags ~2020 note leftovers (Classic LB, five pillars, Spot “bid” talk, etc.)
+- “Report bad question” in the UI so we can stop memorizing wrong acronyms
+
+## Run it
+
+Needs **Node.js 20+**.
 
 ```bash
-cp .env.example .env   # optional; defaults work offline
+git clone https://github.com/<owner>/aws-ate-my-semester.git
+cd aws-ate-my-semester
 npm install
 npm run dev
 ```
 
-**SQLite:** `better-sqlite3@13` installs a prebuilt binary on Node 24 / Windows without Visual Studio (verified). The app talks to SQLite only through `server/src/db.ts`. If a future Node version lacks prebuilds, we can switch that wrapper to Node’s built-in `node:sqlite` without changing call sites.
+Open **http://127.0.0.1:5173** (API is on port **3001**). No `.env` required for a first run.
 
-- App (Vite): http://localhost:5173  
-- API health: http://localhost:3001/api/health  
-
-Ollama is **not** required yet. The health endpoint reports whether Ollama is reachable.
-
-## Ollama later (Windows vs WSL)
-
-Set `OLLAMA_BASE_URL` in `.env` (default `http://127.0.0.1:11434`).
-
-| Where the app runs | Where Ollama runs | Typical `OLLAMA_BASE_URL` |
-|--------------------|-------------------|---------------------------|
-| WSL | WSL | `http://127.0.0.1:11434` |
-| WSL | Windows host | Windows host IP from `/etc/resolv.conf` nameserver, port `11434` |
-| Windows | Windows | `http://127.0.0.1:11434` |
+Ollama is optional. Without it you still get the sample bank. With it (for nicer grading / Bank → Generate):
 
 ```bash
+# install Ollama from https://ollama.com , then:
 ollama pull qwen2.5:7b-instruct
 ```
 
-### Notes + Anki dry-run (Step 3, no DB writes)
+## Configure
 
-```bash
-npm run dry-run:ingest
-```
+`.env` is optional — copy from `.env.example` only if you need to change defaults.
 
-Parses `./notes/Module 6–10 Notes.md` and imports tagged cards from the `.apkg`. Prints chunk counts, sequence candidates, Anki import/skip stats. Source notes are read-only — do not modify them.
+| Variable | Default | What it does |
+|----------|---------|--------------|
+| `PORT` | `3001` | Express API port |
+| `CLIENT_ORIGIN` | `http://localhost:5173` | CORS origin for the Vite UI |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Local Ollama HTTP API |
+| `OLLAMA_MODEL` | `qwen2.5:7b-instruct` | Model for grade / generate / audit |
 
-### Build questions (Step 4, needs Ollama)
+Practice currently picks randomly from the modules you select (there’s no separate selection-weights file yet). Progress is local SQLite at `data/app.db` — delete that file to reset. No export UI yet.
 
-```bash
-ollama pull qwen2.5:7b-instruct
-npm run build:questions -- --module 10   # pilot: one module, no DB writes
-# Optional model override (default unchanged):
-npm run build:questions -- --module 10 --model qwen2.5:14b-instruct
-```
+## Question bank
 
-Writes `data/questions-module-10.json` and `data/review/module-10.md`. Uses temperature `0` + fixed seed for reproducibility; disk cache is keyed by module/chunk/type/model/template version. Fails clearly if Ollama or the model is unavailable. Full multi-module bank + DB load comes after pilot review.
+Ship includes `data/sample-questions.json` (~20 items) so classmates can skip the rebuild. For the full bank, clone [bundickm/AWS_Cloud_Foundations_Study_Materials](https://github.com/bundickm/AWS_Cloud_Foundations_Study_Materials) into `./notes/` (read-only; gitignored), then run `npm run build:questions -- --modules 6,7,8,9,10` with Ollama up, then `npm run merge:questions` and `npm run seed`.
+
+## When it breaks
+
+- **Ollama offline** — fine for practice; Bank → Generate stays disabled until `ollama pull qwen2.5:7b-instruct`
+- **`better-sqlite3` / Node** — use Node 20+; on Windows you may need the C++ build tools if the prebuild misses your Node version
+- **Port in use** — change `PORT` / free 5173, or Vite will hop to 5174
+
+## Heads up
+
+Notes are ~2020-era and some facts aged poorly — the app badges those. Generated questions can be wrong; use **Report**. Not affiliated with Amazon (they have enough money) and not a substitute for official AWS material.
+
+## Contributing
+
+Report a bad question in the app (that’s the useful path). Notes credit: [bundickm/AWS_Cloud_Foundations_Study_Materials](https://github.com/bundickm/AWS_Cloud_Foundations_Study_Materials). **No LICENSE file in this repo yet** — add one before you publish.

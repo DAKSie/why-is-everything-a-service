@@ -113,6 +113,8 @@ export function parseQuestionBank(raw: unknown): Question[] {
       source: input.source,
       sourceRef: input.sourceRef,
       prompt: input.prompt,
+      type: input.type,
+      scenario: input.type === "situational" ? input.scenario : undefined,
     });
     if (input.id && input.id !== id) {
       throw new Error(

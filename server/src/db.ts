@@ -4,7 +4,7 @@ import Database from "better-sqlite3";
 
 /** Thin SQLite facade so callers don't import a driver directly. */
 export type SqlStatement = {
-  run: (...params: unknown[]) => { changes: number };
+  run: (...params: unknown[]) => { changes: number; lastInsertRowid: number | bigint };
   get: (...params: unknown[]) => unknown;
   all: (...params: unknown[]) => unknown[];
 };
@@ -36,7 +36,13 @@ export function openDb(filePath: string): Db {
     prepare(sql) {
       const stmt = raw.prepare(sql);
       return {
-        run: (...params: unknown[]) => stmt.run(...params),
+        run: (...params: unknown[]) => {
+          const info = stmt.run(...params);
+          return {
+            changes: info.changes,
+            lastInsertRowid: info.lastInsertRowid,
+          };
+        },
         get: (...params: unknown[]) => stmt.get(...params),
         all: (...params: unknown[]) => stmt.all(...params),
       };
@@ -48,6 +54,15 @@ export function openDb(filePath: string): Db {
       raw.close();
     },
   };
+}
+
+function ensureColumn(db: Db, table: string, column: string, decl: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+    name: string;
+  }>;
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`);
+  }
 }
 
 export function migrate(db: Db): void {
@@ -79,5 +94,20 @@ export function migrate(db: Db): void {
 
     CREATE INDEX IF NOT EXISTS idx_attempts_question_id ON attempts(question_id);
     CREATE INDEX IF NOT EXISTS idx_questions_module ON questions(module);
+
+    CREATE TABLE IF NOT EXISTS question_reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      question_id TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      timestamp TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_question_reports_qid ON question_reports(question_id);
   `);
+
+  ensureColumn(db, "attempts", "llm_verdict", "TEXT");
+  ensureColumn(db, "attempts", "llm_confidence", "REAL");
+  ensureColumn(db, "attempts", "spelling_error", "INTEGER DEFAULT 0");
+  ensureColumn(db, "attempts", "user_answer", "TEXT");
+  ensureColumn(db, "attempts", "override_note", "TEXT");
 }
