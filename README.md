@@ -15,7 +15,7 @@ Local quiz app for AWS Cloud Foundations Modules 6–10, because “Elastic Bloc
 Needs **Node.js 20+**.
 
 ```bash
-git clone https://github.com/<owner>/aws-ate-my-semester.git
+git clone https://github.com/DAKSie/aws-ate-my-semester.git
 cd aws-ate-my-semester
 npm install
 npm run dev
